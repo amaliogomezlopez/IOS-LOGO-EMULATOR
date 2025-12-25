@@ -98,6 +98,11 @@
         /* ============================================
            IPHONE FRAME
         ============================================ */
+        .iphone-container {
+            transform-origin: center center;
+            transition: transform 0.3s ease;
+        }
+
         .iphone-frame {
             position: relative;
             width: calc(var(--iphone-width) * var(--iphone-scale));
@@ -746,8 +751,9 @@
              PREVIEW AREA - Simulador iPhone
         ============================================ -->
         <div class="preview-area">
-            <div class="iphone-frame">
-                <div class="iphone-screen" id="iphoneScreen">
+            <div class="iphone-container" id="iphoneContainer">
+                <div class="iphone-frame">
+                    <div class="iphone-screen" id="iphoneScreen">
                     <!-- Dynamic Island -->
                     <div class="dynamic-island"></div>
                     
@@ -874,6 +880,7 @@
                                 <i class="fas fa-play"></i>
                             </div>
                         </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -886,6 +893,18 @@
             <div class="panel-header">
                 <h1><i class="fab fa-apple"></i> iOS Icon Previewer</h1>
                 <p>Visualiza tu logo como icono de iOS</p>
+            </div>
+
+            <!-- Sección: Zoom del Teléfono -->
+            <div class="control-section">
+                <h3><i class="fas fa-mobile-alt"></i> Zoom del Teléfono</h3>
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <label for="phoneZoomSlider">Acercar / Alejar</label>
+                        <span class="slider-value" id="phoneZoomValue">100%</span>
+                    </div>
+                    <input type="range" id="phoneZoomSlider" min="50" max="200" step="5" value="100">
+                </div>
             </div>
 
             <!-- Sección: Subir Logo -->
@@ -1008,18 +1027,21 @@
         const testIconLabel = document.getElementById('testIconLabel');
         const iconLabelInput = document.getElementById('iconLabelInput');
         const iphoneScreen = document.getElementById('iphoneScreen');
+        const iphoneContainer = document.getElementById('iphoneContainer');
 
         // Sliders
         const scaleSlider = document.getElementById('scaleSlider');
         const rotationSlider = document.getElementById('rotationSlider');
         const posXSlider = document.getElementById('posXSlider');
         const posYSlider = document.getElementById('posYSlider');
+        const phoneZoomSlider = document.getElementById('phoneZoomSlider');
 
         // Valores de los sliders
         const scaleValue = document.getElementById('scaleValue');
         const rotationValue = document.getElementById('rotationValue');
         const posXValue = document.getElementById('posXValue');
         const posYValue = document.getElementById('posYValue');
+        const phoneZoomValue = document.getElementById('phoneZoomValue');
 
         // Botones
         const fitToFillBtn = document.getElementById('fitToFillBtn');
@@ -1119,21 +1141,30 @@
          * Lee los valores de todos los sliders y aplica transform
          */
         function updateTransform() {
-            if (!currentImageData) return;
-
             const scale = parseFloat(scaleSlider.value);
             const rotation = parseInt(rotationSlider.value);
             const posX = parseInt(posXSlider.value);
             const posY = parseInt(posYSlider.value);
 
-            // Actualizar displays de valores
+            // Actualizar displays de valores siempre
             scaleValue.textContent = `${scale.toFixed(1)}x`;
             rotationValue.textContent = `${rotation}°`;
             posXValue.textContent = `${posX}px`;
             posYValue.textContent = `${posY}px`;
 
-            // Aplicar transformación
-            uploadedImage.style.transform = `translate(${posX}px, ${posY}px) rotate(${rotation}deg) scale(${scale})`;
+            // Aplicar transformación solo si hay imagen
+            if (currentImageData) {
+                uploadedImage.style.transform = `translate(${posX}px, ${posY}px) rotate(${rotation}deg) scale(${scale})`;
+            }
+        }
+
+        /**
+         * Actualiza el zoom del teléfono
+         */
+        function updatePhoneZoom() {
+            const zoom = parseInt(phoneZoomSlider.value);
+            phoneZoomValue.textContent = `${zoom}%`;
+            iphoneContainer.style.transform = `scale(${zoom / 100})`;
         }
 
         /**
@@ -1146,30 +1177,29 @@
             // Dimensiones del contenedor del icono (60x60)
             const containerSize = 60;
             
-            // Calcular aspect ratios
+            // La imagen dentro del contenedor está limitada por object-fit: contain implícito
+            // Necesitamos calcular qué tan grande es la imagen renderizada actualmente
             const imageAspect = imageNaturalWidth / imageNaturalHeight;
-            const containerAspect = 1; // Cuadrado
-
-            let scale;
             
-            if (imageAspect > containerAspect) {
-                // Imagen más ancha que el contenedor
-                scale = containerSize / imageNaturalHeight;
+            let renderedWidth, renderedHeight;
+            
+            if (imageAspect > 1) {
+                // Imagen más ancha que alta
+                renderedWidth = containerSize;
+                renderedHeight = containerSize / imageAspect;
             } else {
-                // Imagen más alta o igual que el contenedor
-                scale = containerSize / imageNaturalWidth;
+                // Imagen más alta que ancha o cuadrada
+                renderedHeight = containerSize;
+                renderedWidth = containerSize * imageAspect;
             }
-
-            // Normalizar escala (la imagen ya está al 100% en el contenedor)
-            // Necesitamos calcular cuánto hay que escalar desde object-fit: contain
-            const containScale = Math.min(containerSize / imageNaturalWidth, containerSize / imageNaturalHeight);
-            const coverScale = Math.max(containerSize / imageNaturalWidth, containerSize / imageNaturalHeight);
             
-            // Ratio final
-            const finalScale = coverScale / containScale;
+            // Para cubrir el contenedor necesitamos escalar hasta que el lado más pequeño cubra
+            const scaleX = containerSize / renderedWidth;
+            const scaleY = containerSize / renderedHeight;
+            const finalScale = Math.max(scaleX, scaleY);
 
             // Aplicar valores
-            scaleSlider.value = Math.min(finalScale, 5).toFixed(1);
+            scaleSlider.value = Math.min(Math.max(finalScale, 0.1), 5).toFixed(1);
             posXSlider.value = 0;
             posYSlider.value = 0;
             rotationSlider.value = 0;
@@ -1203,8 +1233,11 @@
          */
         function changeBackground(bgId) {
             if (backgrounds[bgId]) {
+                // Limpiar cualquier imagen de fondo personalizada
+                iphoneScreen.style.backgroundImage = 'none';
                 iphoneScreen.style.background = backgrounds[bgId];
-                iphoneScreen.style.backgroundImage = '';
+                iphoneScreen.style.backgroundSize = '';
+                iphoneScreen.style.backgroundPosition = '';
             }
         }
 
@@ -1266,6 +1299,7 @@
         rotationSlider.addEventListener('input', updateTransform);
         posXSlider.addEventListener('input', updateTransform);
         posYSlider.addEventListener('input', updateTransform);
+        phoneZoomSlider.addEventListener('input', updatePhoneZoom);
 
         // Botones
         fitToFillBtn.addEventListener('click', fitToFill);
@@ -1306,6 +1340,7 @@
         rotationValue.textContent = `${defaults.rotation}°`;
         posXValue.textContent = `${defaults.posX}px`;
         posYValue.textContent = `${defaults.posY}px`;
+        phoneZoomValue.textContent = '100%';
 
         // Mensaje de bienvenida en consola
         console.log('%c🍎 iOS Icon Previewer', 'color: #007AFF; font-size: 20px; font-weight: bold;');
